@@ -125,7 +125,7 @@ end
 
 assign SDA_low = (SDA_start || SDA_signal) && SDA_stop;
 assign SDA = SDA_low ? 1'b0 : 1'bz;
-assign SCL = (current_state == TRANS && now_state != IDLE) ? 1'b0 : 1'bz;
+assign SCL = (current_state == TRANS && now_state != IDLE && now_state != START) ? 1'b0 : 1'bz;
 //When IDLE stop tickling SCL
 
 always_ff @(posedge clk or negedge rst_n) begin : proc_current_state
@@ -143,52 +143,52 @@ always_ff @(posedge clk or negedge rst_n) begin : proc_now_state
 	if(~rst_n) begin
 		now_state <= #1 IDLE;
 	end else begin
-		case(current_state)
-			IDLE: begin
-				if(!rd_empty) now_state <= #1 START;
-				else now_state <= IDLE;
-			end
-			START: begin
-				now_state <= #1 ADDR;
-			end
-			ADDR: begin
-				if(SDA_pos || SDA_neg) now_state <= #1 START;
-				else begin
-					if(Addr_pos > 0) now_state <= #1 ADDR;
-					else now_state <= #1 RW;
+		if(SCL)
+			case(current_state)
+				IDLE: begin
+					if(!rd_empty) now_state <= #1 START;
+					else now_state <= IDLE;
 				end
-			end
-			RW: begin
-				if(SDA_pos || SDA_neg) now_state <= #1 START;
-				else now_state <= #1 GET_ACK;
-			end
-			GET_ACK: begin
-				if(SDA) now_state <= #1 START;
-				else if(done) now_state <= #1 STOP;
-				else if(write) now_state <= #1 SEND_WRITE;
-				else now_state <= #1 GET_READ;
-			end
-			SEND_WRITE: begin
-				if(mem_pos == 0) now_state <= #1 GET_ACK;
-				else now_state <= #1 SEND_WRITE;
-			end
-			GET_READ: begin
-				if(mem_pos == 0) begin//If done, no need to send ACK, directly send STOP
-					if(done) now_state <= #1 STOP;
-					else now_state <= #1 SEND_ACK;
+				START: begin
+					now_state <= #1 ADDR;
 				end
-				else now_state <= #1 GET_READ;
-			end
-			SEND_ACK: begin
-				if(write) now_state <= #1 SEND_WRITE;
-				else now_state <= #1 GET_READ;
-			end
-			STOP: begin
-				if(SDA_pos || SDA_neg) now_state <= #1 STOP;
-				else now_state <= #1 IDLE;
-			end
-			default: now_state <= #1 now_state;
-		endcase
+				ADDR: begin
+					if(SDA_pos || SDA_neg) now_state <= #1 START;
+					else begin
+						if(Addr_pos > 0) now_state <= #1 ADDR;
+						else now_state <= #1 RW;
+					end
+				end
+				RW: begin
+					if(SDA_pos || SDA_neg) now_state <= #1 START;
+					else now_state <= #1 GET_ACK;
+				end
+				GET_ACK: begin
+					if(SDA) now_state <= #1 START;
+					else if(done) now_state <= #1 STOP;
+					else if(write) now_state <= #1 SEND_WRITE;
+					else now_state <= #1 GET_READ;
+				end
+				SEND_WRITE: begin
+					if(mem_pos == 0) now_state <= #1 GET_ACK;
+					else now_state <= #1 SEND_WRITE;
+				end
+				GET_READ: begin
+					if(mem_pos == 0) begin//If done, no need to send ACK, directly send STOP
+						if(done) now_state <= #1 STOP;
+						else now_state <= #1 SEND_ACK;
+					end
+					else now_state <= #1 GET_READ;
+				end
+				SEND_ACK: begin
+					now_state <= #1 GET_READ;
+				end
+				STOP: begin
+					if(SDA_pos || SDA_neg) now_state <= #1 STOP;
+					else now_state <= #1 IDLE;
+				end
+				default: now_state <= #1 now_state;
+			endcase
 	end
 end
 
@@ -207,8 +207,9 @@ always_ff @(posedge clk or negedge rst_n) begin : proc_Addr_pos
 	if(~rst_n) begin
 		Addr_pos <= #1 6;
 	end else begin
-		if(current_state == ADDR) Addr_pos <= #1 Addr_pos - 1;
-		else if(current_state == START) Addr_pos <= #1 6;
+		if(SCL)
+			if(current_state == ADDR) Addr_pos <= #1 Addr_pos - 1;
+			else if(current_state == START) Addr_pos <= #1 6;
 	end
 end
 
@@ -237,17 +238,18 @@ always_ff @(posedge clk or negedge rst_n) begin : proc_memory
 	if(~rst_n) begin
 		memory <= #1 0;
 	end else begin
-		if(current_state == GET_READ) begin
-			memory[mem_pos] <= #1 SDA;
-			mem_pos <= #1 mem_pos - 1;
-		end
-		else if(current_state == SEND_WRITE) begin
-			mem_pos <= #1 mem_pos - 1;
-		end
-		else if(current_state == GET_ACK) begin
-			memory <= #1 rd_data;
-			mem_pos <= #1 7;
-		end
+		if(SCL)
+			if(current_state == GET_READ) begin
+				memory[mem_pos] <= #1 SDA;
+				mem_pos <= #1 mem_pos - 1;
+			end
+			else if(current_state == SEND_WRITE) begin
+				mem_pos <= #1 mem_pos - 1;
+			end
+			else if(current_state == GET_ACK) begin
+				memory <= #1 rd_data;
+				mem_pos <= #1 7;
+			end
 	end
 end
 
@@ -263,15 +265,20 @@ always_ff @(posedge clk or negedge rst_n) begin : proc_canin
 			canin <= #1 0;
 	end
 end
+//Cannot accept new request when not send out all data
 
 always_comb begin
-	if(current_state == RW && get_Addr) rd_en = 1;
-	else if (current_state == GET_ACK && SDA == 0 && !done) rd_en = 1;
-	else if (current_state == SEND_ACK) rd_en = 1;
+	if(SCL)
+		if(current_state == RW && get_Addr) rd_en = 1;
+		else if (current_state == GET_ACK && SDA == 0 && !done) rd_en = 1;
+		else if (current_state == SEND_ACK) rd_en = 1;
+		else rd_en = 0;
 	else rd_en = 0;
 
-	if(current_state == SEND_ACK) pushout = 1;
-	else if(current_state == STOP && write == 0) pushout = 1;
+	if(SCL)
+		if(current_state == SEND_ACK) pushout = 1;
+		else if(current_state == STOP && write == 0) pushout = 1;
+		else pushout = 0;
 	else pushout = 0;
 end
 
