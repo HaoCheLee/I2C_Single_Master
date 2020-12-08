@@ -36,9 +36,12 @@ assign SCL = SCL_low ? 1'b0 : 1'bz;
 pullup(SDA);
 pullup(SCL);
 
-I2C_master ms1(CLK, RST_n, SDA, SCL, pushin, data_in, canin, pushout, data_out);
+I2C_master ms1( .clk(CLK), .rst_n(RST_n), .SDA(SDA), .SCL(SCL),
+				.pushin(pushin), .data_in(data_in), .canin(canin),
+				.pushout(pushout), .data_out(data_out));
 //Master module/device
-slave_1 sl1(RST_n, SDA, SCL, req, read, slave_mem_pos, slave_mem);
+slave_1 sl1(.rst_n(RST_n), .SDA(SDA), .SCL(SCL), .req(req),
+			.read(read), .mem_pos(slave_mem_pos), .memory(slave_mem));
 //Slave Device
 
 always #5 CLK = ~CLK;
@@ -147,10 +150,10 @@ end
 `ifdef SDA_INTERRUPT
 initial begin//SDA interrupt
 	repeat(50) @(negedge SCL);
-	#1 SDA_low = 1;
+	SDA_low = 1;
 	$display("SDA interrupted @ ",$time());
 	repeat(50) @(negedge SCL);
-	#1 SDA_low = 0;
+	SDA_low = 0;
 	$display("SDA not interrupted @ ",$time());
 	repeat(10) @(negedge SCL);
 end
@@ -158,11 +161,11 @@ end
 
 `ifdef SCL_STRETCH
 initial begin
-	repeat(200) @(posedge CLK);
-	#1 SCL_low = 1;
+	repeat(50) @(posedge CLK);
+	SCL_low = 1;
 	$display("SCL stretch @ ",$time());
 	repeat(200) @(posedge CLK);
-	#2 SCL_low = 0;//#2 to prevent pulse
+	SCL_low = 0;
 	$display("SCL not stretch @ ",$time());
 	repeat(200) @(posedge CLK);
 end

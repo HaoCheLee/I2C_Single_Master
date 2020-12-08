@@ -21,29 +21,29 @@ assign rd_empty = (wr_ptr == rd_ptr) && is_empty;
 always_ff @(posedge clk or negedge rst_n) begin
 	if(~rst_n) begin
 		for (int i = 0; i < (2**ASIZE)-1; i++) begin
-			memory[i] <= #1 0;
+			memory[i] <= 0;
 		end
-		wr_ptr <= #1 0;
-		rd_ptr <= #1 0;
-		is_empty <= #1 1;
+		wr_ptr <= 0;
+		rd_ptr <= 0;
+		is_empty <= 1;
 	end else begin
 		if(wr_en && !wr_full) begin
-			memory[wr_ptr] <= #1 wr_data;
-			wr_ptr <= #1 wr_ptr + 1;
+			memory[wr_ptr] <= wr_data;
+			wr_ptr <= wr_ptr + 1;
 			if(rd_en && !rd_empty) begin
-				rd_ptr <= #1 rd_ptr + 1;
-				is_empty <= #1 is_empty;
+				rd_ptr <= rd_ptr + 1;
+				is_empty <= is_empty;
 			end
 			else
-				is_empty <= #1 0;
+				is_empty <= 0;
 		end
 		else
 			if(rd_en && !rd_empty) begin
-				rd_ptr <= #1 rd_ptr + 1;
-				is_empty <= #1 1;
+				rd_ptr <= rd_ptr + 1;
+				is_empty <= 1;
 			end
 			else
-				is_empty <= #1 is_empty;
+				is_empty <= is_empty;
 	end
 end
 

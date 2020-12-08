@@ -14,7 +14,7 @@ module slave_1 (
 logic req, read;
 wire [7:0] data;
 
-I2C_slave #(.ADDRESS(25)) sl1(rst_n, SDA, SCL, req, read, data);
+I2C_slave #(.ADDRESS(8'h2A)) sl1(.rst_n(rst_n), .SDA(SDA), .SCL(SCL), .req(req), .read(read), .data(data));
 
 logic [7:0][7:0] memory;
 logic [2:0] mem_pos;
@@ -22,17 +22,18 @@ logic [2:0] mem_pos;
 
 always_ff @(negedge SCL or negedge rst_n) begin : proc_memory
 	if(~rst_n) begin
-		memory <= #1 64'hdeadbeefdeadbeef;
+		memory <= 64'hdeadbeefdeadbeef;
 	end else begin
-		if(req) memory[mem_pos] <= #1 data;
+		if(req) memory[mem_pos] <= data;
 	end
 end
 
 always_ff @(negedge SCL or negedge rst_n) begin : proc_mem_pos
+//increase 1 whenever write/read
 	if(~rst_n) begin
-		mem_pos <= #1 0;
+		mem_pos <= 0;
 	end else begin
-		if(req) mem_pos <= #1 mem_pos + 1;
+		if(req) mem_pos <= mem_pos + 1;
 	end
 end
 
